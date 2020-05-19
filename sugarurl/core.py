@@ -14,26 +14,26 @@ class UrlLike(abc.ABC):
         pass
 
 
-class SentinelStr(str):
+class _SentinelStr(str):
     def __bool__(self):
         return True
 
 
-SENTINEL_STR = SentinelStr()
+_SENTINEL_STR = _SentinelStr()
 
 
 class Url(UrlLike):
 
     def defrag(self):
-        new_url = Url(self, fragment=SENTINEL_STR)
+        new_url = Url(self, fragment=_SENTINEL_STR)
         return new_url
 
     def depath(self):
-        new_url = Url(self, path=SENTINEL_STR)
+        new_url = Url(self, path=_SENTINEL_STR)
         return new_url
 
     def deport(self):
-        new_url = Url(self, port=SENTINEL_STR)
+        new_url = Url(self, port=_SENTINEL_STR)
         return new_url
 
     # TODO add docstrings
@@ -81,14 +81,14 @@ class Url(UrlLike):
                     url_attrs[attr] = getattr(split_tuple, attr)
 
         self._params = params or url_attrs.get('params') or dict(
-            self.parse.parse_qsl(url_attrs.get('query') or SENTINEL_STR))
+            self.parse.parse_qsl(url_attrs.get('query') or _SENTINEL_STR))
         self._trailing_slash = trailing_slash or url_attrs.get('trailing_slash')
         self._username = username or url_attrs.get('username')
         self._password = password or url_attrs.get('password')
         self._fragment = fragment or url_attrs.get('fragment')
         self._scheme = scheme or url_attrs.get('scheme')
         self._netloc = netloc or url_attrs.get('netloc')
-        self._path = path or url_attrs.get('path') or SENTINEL_STR
+        self._path = path or url_attrs.get('path') or _SENTINEL_STR
         self._hostname = hostname or url_attrs.get('hostname')
         self._port = port or url_attrs.get('port')
         self._allow_fragments = allow_fragments
@@ -96,7 +96,7 @@ class Url(UrlLike):
         if any(args):
             self._netloc = self._parse_netloc(*args)
 
-        if self._path and self.path is not SENTINEL_STR:
+        if self._path and self.path is not _SENTINEL_STR:
             if isinstance(self._path, Iterable) and not isinstance(self._path, str):
                 path_args = [x for i in map(str, self._path) for x in i.split('/') if x]
                 self._path = '/'.join(path_args)
