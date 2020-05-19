@@ -2,6 +2,7 @@ import abc
 import re
 from typing import Any
 from typing import Dict
+from typing import Hashable
 from typing import Iterable
 from typing import Tuple
 from typing import Type
@@ -16,15 +17,17 @@ class UrlLike(abc.ABC):
 
 
 class _Sentinel:
+    __slots__ = ()
+
     @classmethod
-    def check(cls, value: Any, default: Any) -> Any:
+    def setdefault(cls, value: Any, default: Any) -> Any:
         return default if value is cls else value
 
 
 _TS = Type[_Sentinel]
 
 
-class Url(UrlLike):
+class Url(UrlLike, Hashable):
 
     def defrag(self):
         new_url = Url(self, fragment=_Sentinel)
@@ -34,11 +37,19 @@ class Url(UrlLike):
         new_url = Url(self, path=_Sentinel)
         return new_url
 
+    def deport(self):
+        new_url = Url(self, port=_Sentinel)
+        return new_url
+
     # TODO add docstrings
     parse = parse
     default_scheme = 'https'
-    _re_path_validator = re.compile(r'^(/[^/\s]+/?)+$')
-    _re_netloc = re.compile(r'(?:(?P<username>[^:]+):?(?P<password>.*)@)?(?P<hostname>[^:]+)(?::(?P<port>\d+))?')
+    _RE_PATH_VALIDATOR = re.compile(r'^(/[^/\s]+/?)+$')
+    _RE_NETLOC = re.compile(r"""
+        (?:(?P<username>[^:]+):?(?P<password>.*)@)? # username and password optional
+        (?P<hostname>[^:]+)                         # hostname mandatory
+        (?::(?P<port>\d+))?                         # port optional
+        """, re.VERBOSE)
 
     @classmethod
     def as_localhost(cls, **kwargs) -> 'Url':
@@ -83,12 +94,12 @@ class Url(UrlLike):
         self._trailing_slash = trailing_slash or url_attrs.get('trailing_slash')
         self._username = username or url_attrs.get('username')
         self._password = password or url_attrs.get('password')
-        self._fragment = _Sentinel.check(fragment or url_attrs.get('fragment'), default=None)
+        self._fragment = _Sentinel.setdefault(fragment or url_attrs.get('fragment'), default=None)
         self._scheme = scheme or url_attrs.get('scheme')
         self._netloc = netloc or url_attrs.get('netloc')
-        self._path = _Sentinel.check(path or url_attrs.get('path') or '', default='')
+        self._path = _Sentinel.setdefault(path or url_attrs.get('path') or '', default='')
         self._hostname = hostname or url_attrs.get('hostname')
-        self._port = _Sentinel.check(port or url_attrs.get('port'), default=None)
+        self._port = _Sentinel.setdefault(port or url_attrs.get('port'), default=None)
         self._allow_fragments = allow_fragments
         args = [self._netloc, self._username, self._password, self._hostname, self._port]
         if any(args):
@@ -102,7 +113,7 @@ class Url(UrlLike):
                 self._path = f"/{self._path}"
             if trailing_slash and not path.endswith('/'):
                 self._path = f"{self._path}/"
-            if not self._re_path_validator.match(self._path):
+            if not self._RE_PATH_VALIDATOR.match(self._path):
                 raise ValueError(f'{self._path} is not a valid path')
         if self._netloc and not self._scheme:
             self._scheme = self.default_scheme
@@ -111,7 +122,7 @@ class Url(UrlLike):
         s = self._url_string = self.parse.urlunsplit(
             (self.scheme, self.netloc, self.path, self.query, self.fragment))
         if isinstance(s, bytes) or not s:
-            raise ValueError(f'{repr(self)} cannot formulate url.')
+            raise ValueError(f'{self!r} cannot formulate url.')
 
     def __str__(self):
         return self._url_string
@@ -268,7 +279,7 @@ class Url(UrlLike):
 
     def _parse_netloc(self, netloc, username, password, hostname, port):
         try:
-            d = self._re_netloc.match(netloc).groupdict()
+            d = self._RE_NETLOC.match(netloc).groupdict()
         except Exception:
             d = {}
         username = username or d.get('username')
