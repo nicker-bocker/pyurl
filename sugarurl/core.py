@@ -14,22 +14,31 @@ class UrlLike(abc.ABC):
         pass
 
 
-class _SentinelStr(str):
-    def __bool__(self):
-        return True
+class _Sentinel:
+    @classmethod
+    def check(cls, value:Any, default:Any)->Any:
+        if isinstance(value, cls):
+            return default
+        return value
 
 
-_SENTINEL_STR = _SentinelStr()
+_SENTINEL = _Sentinel()
+
+
+# def _check_sentinel(value: Any, default: Any = ''):
+#     if value is _SENTINEL:
+#         return default
+#     return value
 
 
 class Url(UrlLike):
 
     def defrag(self):
-        new_url = Url(self, fragment=_SENTINEL_STR)
+        new_url = Url(self, fragment=_SENTINEL)
         return new_url
 
     def depath(self):
-        new_url = Url(self, path=_SENTINEL_STR)
+        new_url = Url(self, path=_SENTINEL)
         return new_url
 
     # TODO add docstrings
@@ -55,12 +64,12 @@ class Url(UrlLike):
                  scheme: str = None,
                  hostname: str = None,
                  netloc: str = None,
-                 path: Union[str, Iterable] = None,
+                 path: Union[str, Iterable, _Sentinel] = None,
                  params: Dict[str, Any] = None,
-                 port: Union[int, str] = None,
+                 port: Union[int, str, _Sentinel] = None,
                  username: str = None,
                  password: str = None,
-                 fragment: str = None,
+                 fragment: Union[str, _Sentinel] = None,
                  trailing_slash: bool = False,
                  allow_fragments=True,
                  **kwargs
@@ -77,22 +86,22 @@ class Url(UrlLike):
                     url_attrs[attr] = getattr(split_tuple, attr)
 
         self._params = params or url_attrs.get('params') or dict(
-            self.parse.parse_qsl(url_attrs.get('query') or _SENTINEL_STR))
+            self.parse.parse_qsl(url_attrs.get('query') or ''))
         self._trailing_slash = trailing_slash or url_attrs.get('trailing_slash')
         self._username = username or url_attrs.get('username')
         self._password = password or url_attrs.get('password')
-        self._fragment = fragment or url_attrs.get('fragment')
+        self._fragment = _Sentinel.check(fragment or url_attrs.get('fragment'), default=None)
         self._scheme = scheme or url_attrs.get('scheme')
         self._netloc = netloc or url_attrs.get('netloc')
-        self._path = path or url_attrs.get('path') or _SENTINEL_STR
+        self._path = _Sentinel.check(path or url_attrs.get('path') or '', default='')
         self._hostname = hostname or url_attrs.get('hostname')
-        self._port = port or url_attrs.get('port')
+        self._port = _Sentinel.check(port or url_attrs.get('port'), default=None)
         self._allow_fragments = allow_fragments
         args = [self._netloc, self._username, self._password, self._hostname, self._port]
         if any(args):
             self._netloc = self._parse_netloc(*args)
 
-        if self._path and self.path is not _SENTINEL_STR:
+        if self._path:
             if isinstance(self._path, Iterable) and not isinstance(self._path, str):
                 path_args = [x for i in map(str, self._path) for x in i.split('/') if x]
                 self._path = '/'.join(path_args)
@@ -104,8 +113,8 @@ class Url(UrlLike):
                 raise ValueError(f'{self._path} is not a valid path')
         if self._netloc and not self._scheme:
             self._scheme = self.default_scheme
-        if self._fragment == '':
-            self._fragment = None
+        # if self._fragment == '':
+        #     self._fragment = None
         s = self._url_string = self.parse.urlunsplit(
             (self.scheme, self.netloc, self.path, self.query, self.fragment))
         if isinstance(s, bytes) or not s:

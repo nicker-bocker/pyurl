@@ -6,14 +6,16 @@ from sugarurl import Url
 def test_sentinel_str():
     url = Url('https://docs.python.org/3/library/re.html#module-contents')
     defrag_control = 'https://docs.python.org/3/library/re.html'
-    depath_control = 'https://docs.python.org/#module-contents'
+    depath_control = 'https://docs.python.org#module-contents'
     assert url.defrag() == defrag_control
     assert url.depath() == depath_control
+
 
 def test_trailing_slash():
     url = Url.as_localhost(trailing_slash=True)
     url2 = url.copy()
     assert url2._trailing_slash is True
+
 
 def test_equals():
     u1 = Url.as_localhost(port=300) & dict(a=1, b=2)
@@ -169,6 +171,7 @@ def test_url_schemes():
     except Exception:
         pytest.fail()
         raise
+
 
 def test_construct_from_args():
     url = Url.as_localhost(username='user', password='hunter2', path='/api/v2', params=dict(q='{job="test"}'))
