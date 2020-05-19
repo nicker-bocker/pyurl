@@ -1,11 +1,14 @@
 import pytest
 
-from .context import sugarurl
 from sugarurl import Url
-from requests import PreparedRequest
-from bs4 import BeautifulSoup
-import requests
-from functools import partial
+
+
+def test_sentinel_str():
+    url = Url('https://docs.python.org/3/library/re.html#module-contents')
+    defrag_control = 'https://docs.python.org/3/library/re.html'
+    depath_control = 'https://docs.python.org/#module-contents'
+    assert url.defrag() == defrag_control
+    assert url.depath() == depath_control
 
 
 def test_equals():
