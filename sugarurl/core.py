@@ -18,7 +18,7 @@ class UrlLike(abc.ABC):
 class _Sentinel:
     @classmethod
     def check(cls, value: Any, default: Any) -> Any:
-        return default if value is _Sentinel else value
+        return default if value is cls else value
 
 
 _TS = Type[_Sentinel]
