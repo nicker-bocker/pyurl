@@ -4,6 +4,7 @@ from typing import Any
 from typing import Dict
 from typing import Iterable
 from typing import Tuple
+from typing import Type
 from typing import Union
 from urllib import parse
 
@@ -16,29 +17,21 @@ class UrlLike(abc.ABC):
 
 class _Sentinel:
     @classmethod
-    def check(cls, value:Any, default:Any)->Any:
-        if isinstance(value, cls):
-            return default
-        return value
+    def check(cls, value: Any, default: Any) -> Any:
+        return default if value is _Sentinel else value
 
 
-_SENTINEL = _Sentinel()
-
-
-# def _check_sentinel(value: Any, default: Any = ''):
-#     if value is _SENTINEL:
-#         return default
-#     return value
+_TS = Type[_Sentinel]
 
 
 class Url(UrlLike):
 
     def defrag(self):
-        new_url = Url(self, fragment=_SENTINEL)
+        new_url = Url(self, fragment=_Sentinel)
         return new_url
 
     def depath(self):
-        new_url = Url(self, path=_SENTINEL)
+        new_url = Url(self, path=_Sentinel)
         return new_url
 
     # TODO add docstrings
@@ -64,12 +57,12 @@ class Url(UrlLike):
                  scheme: str = None,
                  hostname: str = None,
                  netloc: str = None,
-                 path: Union[str, Iterable, _Sentinel] = None,
+                 path: Union[str, Iterable, _TS] = None,
                  params: Dict[str, Any] = None,
-                 port: Union[int, str, _Sentinel] = None,
+                 port: Union[int, str, _TS] = None,
                  username: str = None,
                  password: str = None,
-                 fragment: Union[str, _Sentinel] = None,
+                 fragment: Union[str, _TS] = None,
                  trailing_slash: bool = False,
                  allow_fragments=True,
                  **kwargs
