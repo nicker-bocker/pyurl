@@ -10,6 +10,10 @@ def test_sentinel_str():
     assert url.defrag() == defrag_control
     assert url.depath() == depath_control
 
+def test_trailing_slash():
+    url = Url.as_localhost(trailing_slash=True)
+    url2 = url.copy()
+    assert url2._trailing_slash is True
 
 def test_equals():
     u1 = Url.as_localhost(port=300) & dict(a=1, b=2)
