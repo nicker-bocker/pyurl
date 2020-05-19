@@ -32,10 +32,6 @@ class Url(UrlLike):
         new_url = Url(self, path=_SENTINEL_STR)
         return new_url
 
-    def deport(self):
-        new_url = Url(self, port=_SENTINEL_STR)
-        return new_url
-
     # TODO add docstrings
     parse = parse
     default_scheme = 'https'
