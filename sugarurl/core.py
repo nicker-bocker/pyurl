@@ -219,7 +219,6 @@ class Url(UrlLike):
         return Url(self)
 
     def canonical(self):
-        # TODO test
         params = dict(sorted(self.params.items()))
         new_url = Url(self, params=params)
         return new_url
