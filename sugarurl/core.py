@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import abc
 import re
 from typing import Any
@@ -46,15 +48,15 @@ class Url(UrlLike):
         """, re.VERBOSE)
 
     @classmethod
-    def as_localhost(cls, **kwargs) -> 'Url':
+    def as_localhost(cls, **kwargs) -> Url:
         return cls('http://localhost', **kwargs)
 
     @classmethod
-    def as_localhost_ssl(cls, **kwargs) -> 'Url':
+    def as_localhost_ssl(cls, **kwargs) -> Url:
         return cls('https://localhost', **kwargs)
 
     @classmethod
-    def as_base(cls, url, **kwargs) -> 'Url':
+    def as_base(cls, url, **kwargs) -> Url:
         return cls(url).base_url(**kwargs)
 
     def __init__(self,
@@ -72,7 +74,22 @@ class Url(UrlLike):
                  allow_fragments: bool = True,
                  **kwargs
                  ):
+        """Url
 
+        :param base_url:
+        :param scheme:
+        :param hostname: 
+        :param netloc:
+        :param path:
+        :param params:
+        :param port:
+        :param username:
+        :param password:
+        :param fragment:
+        :param trailing_slash:
+        :param allow_fragments:
+        :param kwargs:
+        """
         url_attrs = {}
         if base_url:
             if isinstance(base_url, UrlLike):
@@ -130,7 +147,7 @@ class Url(UrlLike):
                 f'fragment={self.fragment}')
         return f'{name}({args})'
 
-    def __call__(self, **kwargs) -> 'Url':
+    def __call__(self, **kwargs) -> Url:
         new_url = Url(self, **kwargs)
         return new_url
 
@@ -204,7 +221,7 @@ class Url(UrlLike):
         return self._params.copy()
 
     @property
-    def base_url(self) -> 'Url':
+    def base_url(self) -> Url:
         try:
             return self._base_url
         except AttributeError:
@@ -215,7 +232,7 @@ class Url(UrlLike):
     def url(self) -> str:
         return str(self)
 
-    def copy(self) -> 'Url':
+    def copy(self) -> Url:
         return Url(self)
 
     def canonical(self):
@@ -223,12 +240,12 @@ class Url(UrlLike):
         new_url = Url(self, params=params)
         return new_url
 
-    def modparams(self, __dict=None, /, **params) -> 'Url':
+    def modparams(self, __dict=None, /, **params) -> Url:
         __dict = __dict or {}
         new_url = Url(self, params={**self.params, **__dict, **params})
         return new_url
 
-    def modpath(self, index, value) -> 'Url':
+    def modpath(self, index, value) -> Url:
         old_path = self.path
         parts = [p for p in old_path.split('/') if p]
         if index < 0 or index > len(parts):
@@ -241,29 +258,29 @@ class Url(UrlLike):
         new_url = Url(self, path=new_path)
         return new_url
 
-    def urljoin(self, url, allow_fragments=None) -> 'Url':
+    def urljoin(self, url, allow_fragments=None) -> Url:
         if allow_fragments is None:
             allow_fragments = self._allow_fragments
         new_url = Url(self.parse.urljoin(str(self), str(url), allow_fragments))
         return new_url
 
-    def urldefrag(self) -> Tuple['Url', str]:
+    def urldefrag(self) -> Tuple[Url, str]:
         url, frag = self.parse.urldefrag(str(self))
         return (Url(url), frag)
 
-    def defrag(self):
+    def defrag(self) -> Url:
         new_url = Url(self, fragment=None)
         return new_url
 
-    def depath(self):
+    def depath(self) -> Url:
         new_url = Url(self, path=None)
         return new_url
 
-    def deport(self):
+    def deport(self) -> Url:
         new_url = Url(self, port=None)
         return new_url
 
-    def deparam(self):
+    def deparam(self) -> Url:
         new_url = Url(self, params=None)
         return new_url
 
