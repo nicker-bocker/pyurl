@@ -2,45 +2,39 @@ import abc
 import re
 from typing import Any
 from typing import Dict
-from typing import Hashable
 from typing import Iterable
+from typing import Optional
 from typing import Tuple
-from typing import Type
 from typing import Union
 from urllib import parse
+
+
+class _Unset:
+    __slots__ = ()
+
+    def __bool__(self):
+        return False
+
+    def __str__(self):
+        return '_UNSET'
+
+
+_UNSET = _Unset()
+
+
+def _unset_default(value, default):
+    if value is _UNSET:
+        return default
+    return value
 
 
 class UrlLike(abc.ABC):
     @abc.abstractmethod
     def __str__(self):
-        pass
+        """Must override __str__ in subclass"""
 
 
-class _Sentinel:
-    __slots__ = ()
-
-    @classmethod
-    def setdefault(cls, value: Any, default: Any) -> Any:
-        return default if value is cls else value
-
-
-_TS = Type[_Sentinel]
-
-
-class Url(UrlLike, Hashable):
-
-    def defrag(self):
-        new_url = Url(self, fragment=_Sentinel)
-        return new_url
-
-    def depath(self):
-        new_url = Url(self, path=_Sentinel)
-        return new_url
-
-    def deport(self):
-        new_url = Url(self, port=_Sentinel)
-        return new_url
-
+class Url(UrlLike):
     # TODO add docstrings
     parse = parse
     default_scheme = 'https'
@@ -64,18 +58,18 @@ class Url(UrlLike, Hashable):
         return cls(url).base_url(**kwargs)
 
     def __init__(self,
-                 base_url: Union[UrlLike, str] = None, *,
-                 scheme: str = None,
-                 hostname: str = None,
-                 netloc: str = None,
-                 path: Union[str, Iterable, _TS] = None,
-                 params: Dict[str, Any] = None,
-                 port: Union[int, str, _TS] = None,
-                 username: str = None,
-                 password: str = None,
-                 fragment: Union[str, _TS] = None,
+                 base_url: Optional[Union[UrlLike, str]] = _UNSET, *,
+                 scheme: Optional[str] = _UNSET,
+                 hostname: Optional[str] = _UNSET,
+                 netloc: Optional[str] = _UNSET,
+                 path: Optional[Union[str, Iterable]] = _UNSET,
+                 params: Optional[Dict[str, Any]] = _UNSET,
+                 port: Optional[Union[int, str]] = _UNSET,
+                 username: Optional[str] = _UNSET,
+                 password: Optional[str] = _UNSET,
+                 fragment: Optional[str] = _UNSET,
                  trailing_slash: bool = False,
-                 allow_fragments=True,
+                 allow_fragments: bool = True,
                  **kwargs
                  ):
 
@@ -88,23 +82,25 @@ class Url(UrlLike, Hashable):
                 url_attrs = split_tuple._asdict()
                 for attr in ['username', 'password', 'hostname', 'port']:
                     url_attrs[attr] = getattr(split_tuple, attr)
-
-        self._params = params or url_attrs.get('params') or dict(
-            self.parse.parse_qsl(url_attrs.get('query') or ''))
+        if params is _UNSET:
+            p = url_attrs.get('params') or dict(self.parse.parse_qsl(url_attrs.get('query') or ''))
+            self._params = p
+        else:
+            self._params = params
+        self._params = self._params or {}
         self._trailing_slash = trailing_slash or url_attrs.get('trailing_slash')
         self._username = username or url_attrs.get('username')
         self._password = password or url_attrs.get('password')
-        self._fragment = _Sentinel.setdefault(fragment or url_attrs.get('fragment'), default=None)
+        self._fragment = _unset_default(fragment, url_attrs.get('fragment'))
         self._scheme = scheme or url_attrs.get('scheme')
         self._netloc = netloc or url_attrs.get('netloc')
-        self._path = _Sentinel.setdefault(path or url_attrs.get('path') or '', default='')
+        self._path = _unset_default(path, url_attrs.get('path')) or ''
         self._hostname = hostname or url_attrs.get('hostname')
-        self._port = _Sentinel.setdefault(port or url_attrs.get('port'), default=None)
+        self._port = _unset_default(port, url_attrs.get('port'))
         self._allow_fragments = allow_fragments
         args = [self._netloc, self._username, self._password, self._hostname, self._port]
         if any(args):
             self._netloc = self._parse_netloc(*args)
-
         if self._path:
             if isinstance(self._path, Iterable) and not isinstance(self._path, str):
                 path_args = [x for i in map(str, self._path) for x in i.split('/') if x]
@@ -117,8 +113,6 @@ class Url(UrlLike, Hashable):
                 raise ValueError(f'{self._path} is not a valid path')
         if self._netloc and not self._scheme:
             self._scheme = self.default_scheme
-        # if self._fragment == '':
-        #     self._fragment = None
         s = self._url_string = self.parse.urlunsplit(
             (self.scheme, self.netloc, self.path, self.query, self.fragment))
         if isinstance(s, bytes) or not s:
@@ -148,23 +142,7 @@ class Url(UrlLike, Hashable):
             return self._hash
 
     def __eq__(self, other):
-        try:
-            return str(self) == str(other)
-        except Exception:
-            return False
-        # if isinstance(other, str):
-        #     try:
-        #         other = Url(other)
-        #     except Exception:
-        #         return False
-        # conditions = (
-        #         self.scheme == other.scheme
-        #         and self.netloc_port == other.netloc_port
-        #         and self.path == other.path
-        #         and self.fragment == other.fragment
-        #         and self.params == other.params
-        # )
-        # return conditions
+        return str(self) == str(other)
 
     def __and__(self, params_dict):
         new_url = Url(self, params=params_dict)
@@ -264,18 +242,31 @@ class Url(UrlLike, Hashable):
         new_url = Url(self, path=new_path)
         return new_url
 
-    def parse_qsl(self) -> dict:
-        return self.params
-
     def urljoin(self, url, allow_fragments=None) -> 'Url':
         if allow_fragments is None:
             allow_fragments = self._allow_fragments
-        new_url = Url(self.parse.urljoin(self.url, url, allow_fragments))
+        new_url = Url(self.parse.urljoin(str(self), str(url), allow_fragments))
         return new_url
 
     def urldefrag(self) -> Tuple['Url', str]:
         url, frag = self.parse.urldefrag(str(self))
         return (Url(url), frag)
+
+    def defrag(self):
+        new_url = Url(self, fragment=None)
+        return new_url
+
+    def depath(self):
+        new_url = Url(self, path=None)
+        return new_url
+
+    def deport(self):
+        new_url = Url(self, port=None)
+        return new_url
+
+    def deparam(self):
+        new_url = Url(self, params=None)
+        return new_url
 
     def _parse_netloc(self, netloc, username, password, hostname, port):
         try:

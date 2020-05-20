@@ -1,14 +1,44 @@
 import pytest
 
 from sugarurl import Url
+from sugarurl.core import _UNSET, _Unset
 
 
-def test_sentinel_str():
-    url = Url('https://docs.python.org/3/library/re.html#module-contents')
-    defrag_control = 'https://docs.python.org/3/library/re.html'
-    depath_control = 'https://docs.python.org#module-contents'
-    assert url.defrag() == defrag_control
-    assert url.depath() == depath_control
+def test_urllike():
+    from sugarurl.core import UrlLike
+    class URL(UrlLike):
+        pass
+
+    with pytest.raises(TypeError):
+        x = URL()
+
+
+def test_sentinel():
+    assert type(_UNSET) is _Unset
+    assert str(_UNSET) == '_UNSET'
+    url = Url('https://docs.python.org/3/library/re.html#module-contents') & {'a': 'b'}
+    defrag_control = 'https://docs.python.org/3/library/re.html?a=b'
+    depath_control = 'https://docs.python.org?a=b#module-contents'
+    depath_deparam_control = 'https://docs.python.org'
+    defrag = url(fragment=None)
+    depath = url(path=None)
+    de_all = url(path=None, fragment=None, params=None, port=None)
+    assert defrag == defrag_control
+    assert depath == depath_control
+    assert de_all == depath_deparam_control
+    defrag = url.defrag()
+    depath = url.depath()
+    de_all = url.depath().defrag().deport().deparam()
+    assert defrag == defrag_control
+    assert depath == depath_control
+    assert de_all == depath_deparam_control
+    defrag, _ = url.urldefrag()
+    assert defrag == defrag_control
+
+
+def test_canonical():
+    url = Url.as_localhost(params=dict(b=2, a=1))
+    assert url.canonical() == 'http://localhost?a=1&b=2'
 
 
 def test_trailing_slash():
@@ -22,6 +52,13 @@ def test_equals():
     u2 = Url.as_localhost(port=300) & dict(b=2, a=1)
     assert u1 != u2
     assert u1 == Url.as_localhost(port=300) & dict(a=1, b=2)
+
+    class FailStr:
+        def __str__(self):
+            raise Exception('FAIL')
+
+    with pytest.raises(Exception):
+        x = u1 == FailStr()
 
 
 def test_url():
@@ -41,7 +78,11 @@ def test_url():
     ep_x2 = base / 'x'
     assert ep_x1 == ep_x2
     url = Url.as_localhost(username='user', password='pass')
-    print(url)
+    assert url == 'http://user:pass@localhost'
+    url = Url.as_base('https://python-patterns.guide/python/sentinel-object/#the-sentinel-object-pattern')
+    assert url == 'https://python-patterns.guide'
+    url = url(trailing_slash=True, path='/test')
+    assert url == 'https://python-patterns.guide/test/'
 
 
 def test_op_overloading():
@@ -64,11 +105,25 @@ def test_class_method():
         assert hash(u) == hash(control)
 
 
-def test_pathmod():
-    url = Url.as_localhost(path='/part0/part1/part2').base_url / 'weather/radio'
+def test_modpath_urljoin():
+    url = Url.as_localhost(path='/part0/part1/part2')
+    template = 'http://localhost/part0/page{}/part2'
     for i in range(33, 36):
-        u = url.modpath(2, f'page{i}.csv')
-        print(u)
+        u = url.modpath(1, f'page{i}')
+        assert u == template.format(i)
+    assert url.modpath(3, 'append') == 'http://localhost/part0/part1/part2/append'
+    with pytest.raises(IndexError):
+        x = url.modpath(5, 'x')
+    x = url.urljoin(Url.as_localhost_ssl(port=3000, path='/file.txt'))
+    assert x == 'https://localhost:3000/file.txt'
+
+
+# def test_urljoin():
+
+def test_netloc_parser():
+    url = Url.as_localhost()
+    x = url._parse_netloc(*[None] * 5)
+    assert x is None
 
 
 def test_immutability_and_hashing():
@@ -122,25 +177,22 @@ def test_params_copy_over():
 
 def test_user_pass():
     url = Url('http://user:pass@foo.com:80')
-    print(url)
-    print(url.username)
-    print(url.password)
-    print(url.port)
+    assert url.username == 'user' and url.password == 'pass' and url.hostname == 'foo.com' and int(url.port) == 80
 
 
-def test_validation():
-    import re
-    x = 'http://user:pass@foo.com:80/path?q=help'
-    v = re.compile(r"""
-            ^(?P<scheme>[a-z]+)://
-            (?:(?P<username>\w+):(?P<password>\w+)@)?
-            (?P<hostname>[^:/]+)
-            (?::(?P<port>\d+))?
-            (?P<path>/[^\s?]+)?
-            (?:\?(?P<query>[^\s]+))?
-        """, re.VERBOSE)
-    m = v.match(x)
-    print(m.groupdict())
+# def test_validation():
+#     import re
+#     x = 'http://user:pass@foo.com:80/path?q=help'
+#     v = re.compile(r"""
+#             ^(?P<scheme>[a-z]+)://
+#             (?:(?P<username>\w+):(?P<password>\w+)@)?
+#             (?P<hostname>[^:/]+)
+#             (?::(?P<port>\d+))?
+#             (?P<path>/[^\s?]+)?
+#             (?:\?(?P<query>[^\s]+))?
+#         """, re.VERBOSE)
+#     m = v.match(x)
+#     assert m
 
 
 def test_netloc_creation():
