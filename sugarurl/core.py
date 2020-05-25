@@ -6,10 +6,11 @@ from typing import Any
 from typing import Dict
 from typing import Iterable
 from typing import Optional
+from typing import Set
 from typing import Tuple
 from typing import Union
 from urllib import parse
-
+import collections.abc
 
 class _Unset:
     __slots__ = ()
@@ -17,10 +18,11 @@ class _Unset:
     def __bool__(self):
         return False
 
-    def __str__(self):
+    def __repr__(self):
         return '_UNSET'
 
 
+# sentinel
 _UNSET = _Unset()
 
 
@@ -38,6 +40,11 @@ class UrlLike(abc.ABC):
 
 class Url(UrlLike):
     # TODO add docstrings
+    __slots__ = (
+        '_params', '_trailing_slash', '_username', '_password',
+        '_fragment', '_scheme', '_netloc', '_path', '_hostname',
+        '_port', '_allow_fragments', '_url_string', '_hash'
+    )
     parse = parse
     default_scheme = 'https'
     _RE_PATH_VALIDATOR = re.compile(r'^(/[^/\s]+/?)+$')
@@ -58,6 +65,10 @@ class Url(UrlLike):
     @classmethod
     def as_base(cls, url, **kwargs) -> Url:
         return cls(url).base_url(**kwargs)
+
+    @classmethod
+    def url_set(cls, urls: Iterable) -> Set[Url]:
+        return {cls(url) for url in urls}
 
     def __init__(self,
                  base_url: Optional[Union[UrlLike, str]] = _UNSET, *,
@@ -92,16 +103,20 @@ class Url(UrlLike):
         """
         url_attrs = {}
         if base_url:
-            if isinstance(base_url, UrlLike):
-                url_attrs = {k[1:]: v for k, v in vars(base_url).items()}
-            if isinstance(base_url, str):
-                split_tuple = self.parse.urlsplit(base_url, allow_fragments=allow_fragments)
+            # only positional arg could be string or Url
+            if isinstance(base_url, Url):
+                # remove the leading underscore from the attr names
+                url_attrs = {k[1:]: getattr(base_url, k, None) for k in self.__slots__}
+            else:
+                split_tuple = self.parse.urlsplit(str(base_url), allow_fragments=allow_fragments)
                 url_attrs = split_tuple._asdict()
                 for attr in ['username', 'password', 'hostname', 'port']:
                     url_attrs[attr] = getattr(split_tuple, attr)
         if params is _UNSET:
-            p = url_attrs.get('params') or dict(self.parse.parse_qsl(url_attrs.get('query') or ''))
-            self._params = p
+            self._params = (
+                url_attrs.get('params') or
+                dict(self.parse.parse_qsl(url_attrs.get('query') or ''))
+            )
         else:
             self._params = params
         self._params = self._params or {}
@@ -139,27 +154,48 @@ class Url(UrlLike):
         return self._url_string
 
     def __repr__(self):
+        # return str(self)
         name = type(self).__name__
         args = (f'scheme={self.scheme},'
                 f'netloc={self.netloc},'
                 f'path={self.path or None},'
                 f'query={self.query_unquote or None},'
-                f'fragment={self.fragment}')
+                f'fragment={self.fragment or None}')
         return f'{name}({args})'
 
-    def __call__(self, **kwargs) -> Url:
-        new_url = Url(self, **kwargs)
+    def __call__(self, join_url=None, **kwargs) -> Url:
+        if join_url:
+            new_url = self.urljoin(
+                join_url,
+                allow_fragments=kwargs.get('allow_fragments', _UNSET),
+                **kwargs
+            )
+        else:
+            new_url = Url(self, **kwargs)
         return new_url
 
     def __hash__(self):
         try:
             return self._hash
         except AttributeError:
-            self._hash = hash(str(self))
+            s = self.parse.urlunsplit(
+                (self.scheme, self.netloc, self.path, self.sorted_query, self.fragment))
+            self._hash = hash(s)
             return self._hash
 
     def __eq__(self, other):
-        return str(self) == str(other)
+        if not isinstance(other, type(self)):
+            other = type(self)(other)
+        return hash(self) == hash(other)
+        # conditions = (
+        #     self._path == other._path and
+        #     self._params == other._params and
+        #     self._hostname == other._hostname and
+        #     self._fragment == other._fragment and
+        #     self._scheme == other._scheme and
+        #     self._username == other._username and
+        #     self._password == other._password
+        # )
 
     def __and__(self, params_dict):
         new_url = Url(self, params=params_dict)
@@ -176,6 +212,9 @@ class Url(UrlLike):
         new_url = Url(self, path=path)
         return new_url
 
+    def __add__(self, join_url):
+        return self(join_url=join_url)
+
     @property
     def scheme(self) -> str:
         return self._scheme
@@ -190,7 +229,11 @@ class Url(UrlLike):
 
     @property
     def query(self) -> str:
-        return self.parse.urlencode(self.params)
+        return self.parse.urlencode(self._params)
+
+    @property
+    def sorted_query(self) -> str:
+        return self.parse.urlencode(dict(sorted(self._params.items())))
 
     @property
     def query_unquote(self) -> str:
@@ -235,9 +278,9 @@ class Url(UrlLike):
     def copy(self) -> Url:
         return Url(self)
 
-    def canonical(self):
+    def sorted_params(self, **kwargs):
         params = dict(sorted(self.params.items()))
-        new_url = Url(self, params=params)
+        new_url = Url(self, params=params, **kwargs)
         return new_url
 
     def modparams(self, __dict=None, /, **params) -> Url:
@@ -245,43 +288,43 @@ class Url(UrlLike):
         new_url = Url(self, params={**self.params, **__dict, **params})
         return new_url
 
-    def modpath(self, index, value) -> Url:
+    def modpath(self, index, value, **kwargs) -> Url:
         old_path = self.path
         parts = [p for p in old_path.split('/') if p]
-        if index < 0 or index > len(parts):
+        if not 0 <= index <= len(parts):
             raise IndexError(f'{index} is out of range')
         if index == len(parts):
             parts = parts + [str(value)]
         else:
             parts[index] = str(value)
         new_path = f"/{'/'.join(parts)}{'/' if self._trailing_slash else ''}"
-        new_url = Url(self, path=new_path)
+        new_url = Url(self, path=new_path, **kwargs)
         return new_url
 
-    def urljoin(self, url, allow_fragments=None) -> Url:
-        if allow_fragments is None:
+    def urljoin(self, url, allow_fragments=_UNSET, **kwargs) -> Url:
+        if allow_fragments is _UNSET:
             allow_fragments = self._allow_fragments
-        new_url = Url(self.parse.urljoin(str(self), str(url), allow_fragments))
+        new_url = Url(self.parse.urljoin(str(self), str(url), allow_fragments), **kwargs)
         return new_url
 
     def urldefrag(self) -> Tuple[Url, str]:
         url, frag = self.parse.urldefrag(str(self))
         return (Url(url), frag)
 
-    def defrag(self) -> Url:
-        new_url = Url(self, fragment=None)
+    def defrag(self, **kwargs) -> Url:
+        new_url = Url(self, fragment=None, **kwargs)
         return new_url
 
-    def depath(self) -> Url:
-        new_url = Url(self, path=None)
+    def depath(self, **kwargs) -> Url:
+        new_url = Url(self, path=None, **kwargs)
         return new_url
 
-    def deport(self) -> Url:
-        new_url = Url(self, port=None)
+    def deport(self, **kwargs) -> Url:
+        new_url = Url(self, port=None, **kwargs)
         return new_url
 
-    def deparam(self) -> Url:
-        new_url = Url(self, params=None)
+    def deparam(self, **kwargs) -> Url:
+        new_url = Url(self, params=None, **kwargs)
         return new_url
 
     def _parse_netloc(self, netloc, username, password, hostname, port):

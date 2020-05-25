@@ -4,6 +4,15 @@ from sugarurl import Url
 from sugarurl.core import _UNSET, _Unset
 
 
+def test_sets():
+    string_urls = {'http://localhost?a=1&b=2', 'http://localhost?b=2&a=1', 'http://localhost?b=2&a=1&c=3'}
+    assert len(string_urls) == 3
+    urls = Url.url_set(string_urls)
+    assert len(urls) == 2
+    samesies = {'http://localhost?a=1&b=2&c=3', Url('http://localhost?b=2&a=1&c=3')}
+    assert len(samesies) == 1
+
+
 def test_urllike():
     from sugarurl.core import UrlLike
     class URL(UrlLike):
@@ -38,7 +47,7 @@ def test_sentinel():
 
 def test_canonical():
     url = Url.as_localhost(params=dict(b=2, a=1))
-    assert url.canonical() == 'http://localhost?a=1&b=2'
+    assert url.sorted_params() == 'http://localhost?a=1&b=2'
 
 
 def test_trailing_slash():
@@ -50,15 +59,15 @@ def test_trailing_slash():
 def test_equals():
     u1 = Url.as_localhost(port=300) & dict(a=1, b=2)
     u2 = Url.as_localhost(port=300) & dict(b=2, a=1)
-    assert u1 != u2
-    assert u1 == Url.as_localhost(port=300) & dict(a=1, b=2)
+    assert u1 == u2
+    assert u1 != u2 & dict(a=1, b=3)
 
-    class FailStr:
-        def __str__(self):
-            raise Exception('FAIL')
-
-    with pytest.raises(Exception):
-        x = u1 == FailStr()
+    # class FailStr:
+    #     def __str__(self):
+    #         raise Exception('FAIL')
+    #
+    # with pytest.raises(Exception):
+    #     x = u1 == FailStr()
 
 
 def test_url():
@@ -102,7 +111,7 @@ def test_class_method():
     url = Url.as_localhost(port=3000) / 'api/v2' & dict(timeout=3000, limit=100)
     for i, control in enumerate(controls, 1):
         u = url.modparams(page=i)
-        assert hash(u) == hash(control)
+        assert u == control
 
 
 def test_modpath_urljoin():
@@ -116,6 +125,11 @@ def test_modpath_urljoin():
         x = url.modpath(5, 'x')
     x = url.urljoin(Url.as_localhost_ssl(port=3000, path='/file.txt'))
     assert x == 'https://localhost:3000/file.txt'
+
+    u = 'https://www.setlist.fm/search?artist=23de1823&page=1&query=tour%3A%28World+Tour+%E2%80%9819%29'
+    x = '/setlist/king-gizzard-and-the-lizard-wizard/2019/fort-canning-park-singapore-singapore-7b9ade18.html'
+    r = 'https://www.setlist.fm/setlist/king-gizzard-and-the-lizard-wizard/2019/fort-canning-park-singapore-singapore-7b9ade18.html'
+    assert Url(u) + x == r
 
 
 # def test_urljoin():
@@ -170,9 +184,8 @@ def test_bare_caller():
 
 def test_params_copy_over():
     url = Url.as_localhost_ssl(port=3000) / '/api/v2' / ('ep1', 'ep2') & {'page': 1}
-    print(url)
     x = url / 'endpoint'
-    print(x)
+    assert 'page' in url.params
 
 
 def test_user_pass():
